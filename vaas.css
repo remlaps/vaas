@@ -1,0 +1,123 @@
+/* ============================================================
+ * VAAS (Visibility as a Service) — Drop-in widget default theme
+ *
+ * Every value is a fallback chain:
+ *     var(--vaas-*, var(<common-host-token>, <neutral-default>))
+ *
+ * If the host project already defines tokens such as --bg-secondary,
+ * --text-primary, --text-muted, --accent-primary, --glass-border, or
+ * --card-bg (as animalCards does), the widget adopts them automatically.
+ * To fully override, pass a `theme` object to VAAS.init()/mount().
+ * ============================================================ */
+
+.vaas-section {
+    background: var(--vaas-bg, var(--bg-secondary, rgba(30, 41, 59, 0.85)));
+    color: var(--vaas-text, var(--text-primary, #f8fafc));
+    border: 1px solid var(--vaas-border, var(--glass-border, rgba(255, 255, 255, 0.1)));
+    border-radius: var(--vaas-radius, 0.75rem);
+    padding: 0.75rem;
+    font-family: var(--vaas-font-family, inherit);
+    font-size: var(--vaas-font-size, 0.95rem);
+    line-height: 1.5;
+    box-sizing: border-box;
+    position: relative;
+    box-shadow: var(--vaas-shadow, 0 -4px 20px rgba(0, 0, 0, 0.2));
+    margin: 0;
+}
+.vaas-section *,
+.vaas-section *::before,
+.vaas-section *::after { box-sizing: border-box; }
+
+/* Fixed bottom-bar option (VAAS.init({ position: 'fixed' })) */
+.vaas-section.vaas-fixed {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    max-width: 1400px;
+    z-index: 1000;
+    border-radius: var(--vaas-radius, 0.75rem) var(--vaas-radius, 0.75rem) 0 0;
+}
+
+.vaas-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+.vaas-title {
+    font-weight: 700;
+    color: var(--vaas-text, inherit);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+.vaas-title .small {
+    font-size: 0.7rem;
+    font-weight: 400;
+    color: var(--vaas-muted, var(--text-muted, #94a3b8));
+}
+.vaas-status {
+    font-size: 0.75rem;
+    color: var(--vaas-muted, var(--text-muted, #94a3b8));
+}
+
+.vaas-holder {
+    border-radius: 0.5rem;
+    padding: 0.5rem;
+    min-height: 60px;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    border: 2px solid var(--vaas-card-border, var(--border, #334155));
+    background-color: var(--vaas-card-bg, var(--card-bg, rgba(255, 255, 255, 0.04)));
+    position: relative;
+    overflow: hidden;
+}
+.vaas-holder.hidden { display: none; }
+
+.vaas-heading {
+    font-weight: 700;
+    color: var(--vaas-text, currentColor);
+}
+
+.vaas-scroll-wrap {
+    overflow: hidden;
+    white-space: nowrap;
+    position: relative;
+}
+.vaas-scroll-text {
+    display: inline-block;
+    white-space: nowrap;
+    padding-left: 100%;
+    animation: vaas-scroll 20s linear infinite;
+}
+.vaas-scroll-text.paused { animation-play-state: paused; }
+@keyframes vaas-scroll {
+    0%   { transform: translateX(0); }
+    100% { transform: translateX(-100%); }
+}
+
+.vaas-details {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    font-size: 0.8rem;
+    color: var(--vaas-muted, var(--text-muted, #94a3b8));
+}
+.vaas-details span { white-space: nowrap; }
+.vaas-details strong {
+    color: var(--vaas-text, currentColor);
+    font-weight: 600;
+}
+
+.vaas-link {
+    font-size: 0.8rem;
+    color: var(--vaas-accent, var(--accent-primary, #3b82f6));
+    text-decoration: none;
+    font-weight: 600;
+    white-space: nowrap;
+}
+.vaas-link:hover { text-decoration: underline; }

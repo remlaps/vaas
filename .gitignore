@@ -1,0 +1,8 @@
+# Sensitive / local-only
+.DS_Store
+Thumbs.db
+*.log
+npm-debug.log*
+node_modules/
+.vscode/
+.idea/

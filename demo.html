@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VAAS — Drop-in Widget Demo</title>
+    <link rel="stylesheet" href="vaas.css">
+    <style>
+        /* Simulate a host project's design tokens (mirrors animalCards' sheet). */
+        :root {
+            --bg-primary: #0f172a;
+            --bg-secondary: #1e293b;
+            --text-primary: #f8fafc;
+            --text-muted: #94a3b8;
+            --accent-primary: #3b82f6;
+            --glass-border: rgba(255, 255, 255, 0.1);
+            --card-bg: rgba(30, 41, 59, 0.7);
+        }
+        body {
+            margin: 0;
+            font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            box-sizing: border-box;
+        }
+        .page { max-width: 920px; margin: 0 auto; padding: 3rem 1.5rem 14rem; }
+        h1 { font-size: 1.8rem; margin-bottom: 0.5rem; }
+        p { color: var(--text-muted); line-height: 1.6; }
+        code {
+            background: rgba(255, 255, 255, 0.08);
+            padding: 0.1rem 0.35rem;
+            border-radius: 4px;
+        }
+        pre {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid var(--glass-border);
+            border-radius: 8px;
+            padding: 0.75rem;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    <div class="page">
+        <h1>VAAS Drop-in Widget — Demo</h1>
+        <p>This page defines host design tokens (<code>--bg-secondary</code>,
+        <code>--text-primary</code>, <code>--accent-primary</code>, …). The widget below
+        adopts them automatically through CSS <code>var()</code> fallback chains.</p>
+        <p>Mounted with: <code>VAAS.init({ position: 'fixed' }).mount('#vaas-mount')</code></p>
+        <pre id="statusNote">Initializing — the widget polls the Steem chain and
+rotates between @null beneficiary posts and promo/broadcast transfers.
+Open the browser console to watch it work.</pre>
+    </div>
+
+    <!-- Host decides where the widget lives; here it is a fixed bottom bar. -->
+    <div id="vaas-mount"></div>
+
+    <script src="vaas.js"></script>
+    <script>
+        VAAS.init({ position: 'fixed' }).mount('#vaas-mount');
+    </script>
+</body>
+</html>
