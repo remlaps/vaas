@@ -31,8 +31,7 @@
         minRep: 45.0,
         minFollowers: 20,
         minMedFollowerRep: 35.0,
-        pollMsBehind: 1000,    // poll delay while catching up
-        pollMsCaughtUp: 3000,  // nominal poll delay
+        pollMsBehind: 1000,    // fixed poll interval (also used for background tabs)
         position: 'inline',    // 'inline' (fills its container) | 'fixed' (bottom bar)
         storageKey: null,      // auto-namespaced per host page when null
         theme: null,           // { bg, text, muted, accent, cardBg, border, radius, heat: [...] }
@@ -625,6 +624,7 @@
             if (!props || !props.last_irreversible_block_num) return;
             var lastIrreversible = props.last_irreversible_block_num;
             state.lastIrreversibleBlock = lastIrreversible;
+            trimExpired(); // age out old entries continuously, even when the tab is unfocused
             if (state.lastBlockChecked === 0) {
                 state.lastBlockChecked = lastIrreversible;
                 state.currentBlock = lastIrreversible;
@@ -647,13 +647,15 @@
         }
     }
 
-    function scheduleNextPoll() {
+    // Poll on a fixed interval. A top-level setInterval (a non-chained timer) is
+    // exempt from browsers' "intensive throttle" on chained timers, so the widget
+    // keeps filling its pools and aging out old entries even in a background tab
+    // (background timers are only throttled to ~1s, which is fine vs ~1 block/3s).
+    function startPolling() {
         if (state.destroyed || !state.mounted) return;
-        var behind = state.lastIrreversibleBlock && state.lastBlockChecked < state.lastIrreversibleBlock;
-        pollTimer = setTimeout(async function () {
-            await pollBlock();
-            scheduleNextPoll();
-        }, behind ? config.pollMsBehind : config.pollMsCaughtUp);
+        pollTimer = setInterval(function () {
+            pollBlock();
+        }, config.pollMsBehind);
     }
 
     // ------------------------------------------------------------
@@ -760,7 +762,7 @@
                 if (restored) updateStatus();
                 await fetchFeedHistory();
                 await pollBlock();
-                scheduleNextPoll();
+                startPolling();
             } catch (e) {
                 console.error('VAAS init error:', e);
                 if (els.status) els.status.textContent = 'VAAS initialization failed.';
@@ -772,7 +774,7 @@
         if (!state.mounted) return;
         state.mounted = false;
         state.destroyed = true;
-        if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; }
+        if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
         if (rootEl && rootEl.parentNode) rootEl.parentNode.removeChild(rootEl);
         if (injectedThemeStyle && injectedThemeStyle.parentNode) injectedThemeStyle.parentNode.removeChild(injectedThemeStyle);
         injectedThemeStyle = null;

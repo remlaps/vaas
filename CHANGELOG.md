@@ -2,6 +2,21 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.2.0] - 2026-08-12
+
+### Changed
+
+- Reworked blockchain polling from a recursive `setTimeout` to a fixed
+  `setInterval` loop. Because browsers throttle **chained** timers aggressively
+  in background tabs (down to ~1/min in Chrome after ~5 min), the widget now
+  uses a top-level interval that is only throttled to ~1s while unfocused.
+  This keeps the candidate pools filling and old entries aging out even when
+  the tab is not in focus.
+- `trimExpired()` now runs on every poll tick (not just on the 30-block display
+  cycle) so expired items are aged out continuously.
+- Removed the now-unused `pollMsCaughtUp` config option; `pollMsBehind` is the
+  single fixed poll interval.
+
 ## [0.1.0] - 2026-08-12
 
 ### Added

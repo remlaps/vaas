@@ -47,8 +47,7 @@ All options are optional; the second argument to `mount()` can also override per
 | `minRep`               | `45.0`                    | Minimum author reputation (Pool A gate) |
 | `minFollowers`         | `20`                      | Minimum follower count (Pool A gate) |
 | `minMedFollowerRep`    | `35.0`                    | Minimum median follower rep (Pool A gate) |
-| `pollMsBehind`         | `1000`                    | Poll delay while catching up |
-| `pollMsCaughtUp`       | `3000`                    | Nominal poll delay |
+| `pollMsBehind`         | `1000`                    | Fixed poll interval (ms). A top-level `setInterval` keeps running (throttled to ~1s) in background tabs, so the pool keeps filling and aging out even when unfocused |
 | `position`             | `'inline'`                | `'inline'` fills its container; `'fixed'` sticks to the bottom |
 | `storageKey`           | `null`                    | Override the auto-namespaced `localStorage` key |
 | `theme`                | `null`                    | Object of explicit theme values (see Theming) |
