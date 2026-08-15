@@ -2,6 +2,24 @@
 
 All notable changes to this project are documented in this file.
 
+## [Unreleased]
+
+### Changed
+
+- Fixed the widget **falling behind the chain when the browser tab loses
+  focus**. The previous approach relied on the assumption that background
+  `setInterval` is only throttled to ~1s, but modern browsers throttle
+  hidden-tab timers far harder (Chrome "intensive throttling" drops them to
+  ~1/minute, and some engines pause them entirely). Because `pollBlock()`
+  advanced the block cursor by only **one** block per poll, `currentBlock` and
+  the candidate pools permanently lagged the chain while unfocused.
+  `pollBlock()` now drains the entire missed-block gap in a single pass on each
+  tick, so any poll that fires — even a heavily throttled background tick —
+  fully catches back up to the last irreversible block.
+- Added a `visibilitychange` / `pageshow` listener so the widget immediately
+  catches up the moment the tab regains focus (including bfcache restores),
+  instead of waiting for the next interval tick.
+
 ## [0.2.0] - 2026-08-12
 
 ### Changed

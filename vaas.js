@@ -631,15 +631,24 @@
                 updateStatus();
                 return;
             }
-            if (state.lastBlockChecked >= lastIrreversible) return;
-            var blockNum = state.lastBlockChecked + 1;
-            var ops = await rpc('condenser_api.get_ops_in_block', [blockNum, false]);
-            if (ops && Array.isArray(ops)) await processBlockOps(ops, blockNum);
-            state.lastBlockChecked = blockNum;
-            state.currentBlock = blockNum;
+            // Catch up on every block missed while the tab was hidden or the
+            // timer was throttled. Hidden tabs are throttled far harder than 1s
+            // today (Chrome "intensive throttling" fires background-tab timers at
+            // ~1/minute; some engines pause them entirely), so advancing only ONE
+            // block per poll lets currentBlock / lastBlockChecked permanently lag
+            // the chain. Draining the whole gap in a single pass guarantees the
+            // widget never falls behind, no matter how aggressive the background
+            // throttling was between ticks.
+            while (state.lastBlockChecked < lastIrreversible) {
+                var blockNum = state.lastBlockChecked + 1;
+                var ops = await rpc('condenser_api.get_ops_in_block', [blockNum, false]);
+                if (ops && Array.isArray(ops)) await processBlockOps(ops, blockNum);
+                state.lastBlockChecked = blockNum;
+                state.currentBlock = blockNum;
+                if (blockNum % config.interval === 1) await displayCycle();
+                else if (blockNum % config.interval === 2) state.changePost = true;
+            }
             updateStatus();
-            if (blockNum % config.interval === 1) await displayCycle();
-            else if (blockNum % config.interval === 2) state.changePost = true;
         } catch (e) {
             console.error('VAAS poll error:', e);
         } finally {
@@ -647,15 +656,25 @@
         }
     }
 
-    // Poll on a fixed interval. A top-level setInterval (a non-chained timer) is
-    // exempt from browsers' "intensive throttle" on chained timers, so the widget
-    // keeps filling its pools and aging out old entries even in a background tab
-    // (background timers are only throttled to ~1s, which is fine vs ~1 block/3s).
+    // Poll on a fixed interval. While the tab is hidden, browsers throttle this
+    // timer heavily (some to ~1/minute), so polling alone can't keep currentBlock
+    // in lockstep with the chain. pollBlock() therefore drains the entire
+    // missed-block gap in one pass on every tick, so even a throttled background
+    // poll fully catches up the moment it fires.
     function startPolling() {
         if (state.destroyed || !state.mounted) return;
         pollTimer = setInterval(function () {
             pollBlock();
         }, config.pollMsBehind);
+    }
+
+    // When the tab regains focus, catch back up immediately instead of waiting for
+    // the next (possibly throttled) interval tick. visibilitychange fires on
+    // refocus; pageshow covers bfcache restores. The state.polling guard (set
+    // synchronously at the top of pollBlock) prevents overlapping runs.
+    function pollNowIfVisible() {
+        if (!state.mounted || state.destroyed) return;
+        if (document.visibilityState === 'visible' && !state.polling) pollBlock();
     }
 
     // ------------------------------------------------------------
@@ -756,6 +775,8 @@
         };
         state.mounted = true;
         state.destroyed = false;
+        document.addEventListener('visibilitychange', pollNowIfVisible);
+        document.addEventListener('pageshow', pollNowIfVisible);
         (async function () {
             try {
                 var restored = restoreShared();
@@ -775,6 +796,8 @@
         state.mounted = false;
         state.destroyed = true;
         if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+        document.removeEventListener('visibilitychange', pollNowIfVisible);
+        document.removeEventListener('pageshow', pollNowIfVisible);
         if (rootEl && rootEl.parentNode) rootEl.parentNode.removeChild(rootEl);
         if (injectedThemeStyle && injectedThemeStyle.parentNode) injectedThemeStyle.parentNode.removeChild(injectedThemeStyle);
         injectedThemeStyle = null;
