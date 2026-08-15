@@ -35,7 +35,9 @@ global.localStorage = (function () {
 global.document = {
     createElement: function () { return makeEl(); },
     querySelector: function () { return makeEl(); },
-    head: { appendChild: function () {} }
+    head: { appendChild: function () {} },
+    addEventListener: function () {},
+    removeEventListener: function () {}
 };
 
 // --- fetch shim (Steem RPC) ---------------------------------------
