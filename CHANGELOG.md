@@ -6,6 +6,22 @@ All notable changes to this project are documented in this file.
 
 ### Changed
 
+- **Time-based display rotation.** The displayed item used to rotate every
+  `interval` blocks (default 30, ~90 s). Because `pollBlock()` drains the whole
+  missed-block backlog in one fast burst on each tick, that rule rotated the
+  display many times in quick succession whenever the widget caught up (e.g.
+  after a hidden tab). Rotations are now gated on wall-clock time via the new
+  `displayIntervalMs` option (default `90000`), so the cadence is a true ~90 s
+  no matter how many blocks are processed at once. The two-phase `changePost`
+  flag was removed in favour of the time gate.
+- **Per-origin shared state.** Added a new `scope` option (`'page'` default |
+  `'origin'`). When set to `'origin'`, the persisted `localStorage` state is
+  keyed by host only (not host+path), so all pages on the same host share one
+  pool/display and the widget stays consistent when navigating between pages
+  (e.g. portfolio search → leaderboard → home).
+
+### Fixed
+
 - Fixed the widget **falling behind the chain when the browser tab loses
   focus**. The previous approach relied on the assumption that background
   `setInterval` is only throttled to ~1s, but modern browsers throttle

@@ -6,8 +6,8 @@ A self-contained, dependency-free web widget that implements the [VAAS selection
   1. **Null-beneficiary posts** — posts whose `comment_options` give a cut to the `null` account (authors "burning" a portion of rewards), subject to quality gates.
   2. **Promotional transfers / vanity broadcasts** — `transfer`s to `null` with a non-blank memo.
 - Rotate between those two pools with **age-decayed, weighted-random** selection (weight halves every ~1 hour, items expire after ~1 day).
-- Refresh every 30 blocks (~90 s) with a heat-scale border and animated scrolling title.
-- **Adopt the look & feel of the host project** via CSS custom-property fallback chains.
+- Rotate the displayed item every **~90 wall-clock seconds** (not every N blocks), so the rotation cadence stays constant even when the widget rapidly catches up on missed blocks.
+- Adopt the **look & feel of the host project** via CSS custom-property fallback chains.
 
 ## Quick start
 
@@ -48,8 +48,10 @@ All options are optional; the second argument to `mount()` can also override per
 | `minFollowers`         | `20`                      | Minimum follower count (Pool A gate) |
 | `minMedFollowerRep`    | `35.0`                    | Minimum median follower rep (Pool A gate) |
 | `pollMsBehind`         | `1000`                    | Fixed poll interval (ms). A top-level `setInterval` keeps running (throttled to ~1s) in background tabs, so the pool keeps filling and aging out even when unfocused |
+| `displayIntervalMs`    | `90000`                   | Wall-clock ms between displayed-content rotations (~90 s). Gating on real time (rather than block counts) keeps the rotation cadence constant even when the widget drains a large backlog of missed blocks at once |
 | `position`             | `'inline'`                | `'inline'` fills its container; `'fixed'` sticks to the bottom |
 | `storageKey`           | `null`                    | Override the auto-namespaced `localStorage` key |
+| `scope`                | `'page'`                  | `'page'` keeps persisted state isolated per URL path; `'origin'` shares a single state store across **all pages on the same host**, so the widget stays consistent when you navigate between pages |
 | `theme`                | `null`                    | Object of explicit theme values (see Theming) |
 | `onDisplay`            | `null`                    | Callback invoked with each rendered display payload |
 
@@ -113,13 +115,17 @@ CSS variables, e.g. `#vaas { --vaas-bg: #1a1a2e; }`.
      nonzero, filtered by `rep > 45 && followers > 20 && medianFollowerRep > 35`.
    - **Pool B** — `transfer`s to `null` with a non-blank memo; SBD amounts are
      normalized to STEEM using the median feed-history ratio.
-3. Every `interval` blocks it trims expired items and picks a content type
+3. Every rotation it trims expired items and picks a content type
    (3-way random; types 1 & 2 both mean "promo", giving memos a 2:1 draw bias).
+   Rotations are **wall-clock gated** to `displayIntervalMs` (~90 s) via
+   `lastDisplayTime`, so catching up on many missed blocks at once never speeds
+   up the rotation cadence.
 4. A weighted-random item is chosen (posts use integer weights, memos float).
 5. Metadata is fetched (title/payout/votes, author rep, followers, median
    follower rep) and rendered with a heat-scale border + scrolling title.
-6. State is persisted to `localStorage` (under a page-namespaced key) so the
-   current display survives reloads.
+6. State is persisted to `localStorage` (under an origin- or page-namespaced key
+   depending on `scope`) so the current display survives reloads and stays
+   consistent across pages that opt in to `scope: 'origin'`.
 
 ## Files
 
