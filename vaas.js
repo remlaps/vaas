@@ -32,8 +32,10 @@
         minFollowers: 20,
         minMedFollowerRep: 35.0,
         pollMsBehind: 1000,    // fixed poll interval (also used for background tabs)
+        displayIntervalMs: 90000, // wall-clock ms between display rotations (~90 s)
         position: 'inline',    // 'inline' (fills its container) | 'fixed' (bottom bar)
-        storageKey: null,      // auto-namespaced per host page when null
+        storageKey: null,      // override the auto-namespaced localStorage key when not null
+        scope: 'page',         // 'page' (per-page state) | 'origin' (shared across all pages on this host)
         theme: null,           // { bg, text, muted, accent, cardBg, border, radius, heat: [...] }
         onDisplay: null        // callback(displayPayload)
     };
@@ -53,7 +55,7 @@
     var state = {
         postPool: [],          // Pool A — null-beneficiary posts
         memoPool: [],          // Pool B — promo/vanity transfers
-        changePost: true,
+        lastDisplayTime: 0,    // epoch ms of the last display rotation (time-gates displayCycle)
         lastBlockChecked: 0,
         lastIrreversibleBlock: 0,
         steemPerSbd: 9.5,      // fallback; updated from feed history
@@ -569,8 +571,6 @@
     // Display cycle
     // ------------------------------------------------------------
     async function handleBeneficiaryPost() {
-        if (!state.changePost) return;
-        state.changePost = false;
         var post = getRandomPost();
         if (!post) { if (state.postPool.length === 0) showEmpty(); return; }
         var meta = await fetchPostMetadata(post.author, post.permlink);
@@ -587,8 +587,6 @@
     }
 
     async function handlePromoMemo() {
-        if (!state.changePost) return;
-        state.changePost = false;
         if (state.memoPool.length === 0) { showEmpty(); return; }
         var memo = getRandomMemo();
         if (!memo) return;
@@ -605,6 +603,15 @@
     }
 
     async function displayCycle() {
+        // Time-gate the rotation on WALL-CLOCK elapsed time, not on the number of
+        // blocks drained. pollBlock()'s while-loop can process hundreds of blocks
+        // in a fast burst (e.g. catching up after a hidden tab). Under the old
+        // "every `interval` blocks" rule that burst rotated the display far more
+        // often than the intended ~90 s. Gating on Date.now() keeps rotations to
+        // one per displayIntervalMs no matter how fast we catch up.
+        var now = Date.now();
+        if (state.lastDisplayTime && (now - state.lastDisplayTime) < config.displayIntervalMs) return;
+        state.lastDisplayTime = now;
         trimExpired();
         var type = selectType();
         if (type === 0) await handleBeneficiaryPost();
@@ -645,9 +652,12 @@
                 if (ops && Array.isArray(ops)) await processBlockOps(ops, blockNum);
                 state.lastBlockChecked = blockNum;
                 state.currentBlock = blockNum;
-                if (blockNum % config.interval === 1) await displayCycle();
-                else if (blockNum % config.interval === 2) state.changePost = true;
             }
+            // Try to rotate the display once per poll pass. displayCycle() is
+            // internally time-gated (Date.now() vs lastDisplayTime), so this fires
+            // at most once per rotation interval even after a long background
+            // catch-up burst, and harmlessly no-ops on passes where < 90 s remain.
+            await displayCycle();
             updateStatus();
         } catch (e) {
             console.error('VAAS poll error:', e);
@@ -682,7 +692,8 @@
     // ------------------------------------------------------------
     function storageKey() {
         if (config.storageKey) return config.storageKey;
-        var host = (location.hostname + location.pathname).replace(/[^a-zA-Z0-9]/g, '_');
+        var scoped = (config.scope === 'origin') ? location.hostname : (location.hostname + location.pathname);
+        var host = scoped.replace(/[^a-zA-Z0-9]/g, '_');
         return 'vaas_state_' + host + '_v1';
     }
 

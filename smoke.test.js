@@ -41,7 +41,7 @@ global.document = {
 };
 
 // --- fetch shim (Steem RPC) ---------------------------------------
-let headNum = 29;          // 1st poll: head 30 (sync); 2nd poll: head 31 (31%30==1 -> display)
+let headNum = 29;          // 1st poll: head 30 (sync); 2nd poll: head 31 -> display try
 function headNext() { headNum += 1; return headNum; }
 
 global.fetch = async function (url, opts) {
@@ -101,7 +101,8 @@ const captured = [];
 (async function () {
     const target = makeEl();
     VAAS.init({
-        pollMsCaughtUp: 50,
+        // Disable the wall-clock rotation gate so a display renders quickly under test.
+        displayIntervalMs: 1,
         pollMsBehind: 50,
         onDisplay: function (d) { captured.push(d); }
     }).mount(target);
