@@ -638,6 +638,19 @@
                 updateStatus();
                 return;
             }
+            // If we're more than maxlifeBlocks behind, skip ahead. All items from
+            // those aged-out blocks would have expired anyway, so clear the pools
+            // and jump to within maxlifeBlocks of the tip.
+            if (state.lastBlockChecked > 0 && (lastIrreversible - state.lastBlockChecked) > config.maxlifeBlocks) {
+                var skippedBlocks = lastIrreversible - state.lastBlockChecked;
+                state.lastBlockChecked = lastIrreversible - config.maxlifeBlocks;
+                state.currentBlock = state.lastBlockChecked;
+                state.postPool = [];
+                state.memoPool = [];
+                console.warn('VAAS: skipped ' + skippedBlocks + ' stale blocks, jumping to block #' + state.lastBlockChecked);
+                persistShared();
+                updateStatus();
+            }
             // Catch up on every block missed while the tab was hidden or the
             // timer was throttled. Hidden tabs are throttled far harder than 1s
             // today (Chrome "intensive throttling" fires background-tab timers at
@@ -646,8 +659,17 @@
             // the chain. Draining the whole gap in a single pass guarantees the
             // widget never falls behind, no matter how aggressive the background
             // throttling was between ticks.
+            var lastCatchupRotation = Date.now();
             while (state.lastBlockChecked < lastIrreversible) {
                 var blockNum = state.lastBlockChecked + 1;
+                // Rotate the display on wall-clock time even during a long catch-up
+                // batch, so the widget keeps shuffling cards every 90 s without
+                // waiting for the entire backlog to drain.
+                if ((Date.now() - lastCatchupRotation) >= config.displayIntervalMs) {
+                    await displayCycle();
+                    updateStatus();
+                    lastCatchupRotation = Date.now();
+                }
                 var ops = await rpc('condenser_api.get_ops_in_block', [blockNum, false]);
                 if (ops && Array.isArray(ops)) await processBlockOps(ops, blockNum);
                 state.lastBlockChecked = blockNum;
