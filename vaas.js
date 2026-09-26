@@ -31,8 +31,9 @@
         minRep: 45.0,
         minFollowers: 20,
         minMedFollowerRep: 35.0,
-        pollMsBehind: 1000,    // fixed poll interval (also used for background tabs)
+        pollMsBehind: 3000,    // fixed poll interval (Steem block time is ~3 s; also used for background tabs)
         displayIntervalMs: 90000, // wall-clock ms between display rotations (~90 s)
+        maxBlocksPerPass: 100, // cap blocks drained per poll pass (limits RPC bursts while catching up)
         position: 'inline',    // 'inline' (fills its container) | 'fixed' (bottom bar)
         storageKey: null,      // override the auto-namespaced localStorage key when not null
         scope: 'page',         // 'page' (per-page state) | 'origin' (shared across all pages on this host)
@@ -69,6 +70,8 @@
     var authorCache = {};
     var META_RETRIES = 5;
     var FOLLOWER_PAGES = 5;
+    var BLOCK_RETRIES = 3;     // retries per block fetch before pausing catch-up this pass
+    var BLOCK_RETRY_MS = 500;  // backoff between block-fetch retries
 
     // DOM references (filled on mount)
     var rootEl = null;
@@ -651,48 +654,65 @@
                 persistShared();
                 updateStatus();
             }
-            // Catch up on every block missed while the tab was hidden or the
-            // timer was throttled. Hidden tabs are throttled far harder than 1s
-            // today (Chrome "intensive throttling" fires background-tab timers at
-            // ~1/minute; some engines pause them entirely), so advancing only ONE
-            // block per poll lets currentBlock / lastBlockChecked permanently lag
-            // the chain. Draining the whole gap in a single pass guarantees the
-            // widget never falls behind, no matter how aggressive the background
-            // throttling was between ticks.
-            var lastCatchupRotation = Date.now();
-            while (state.lastBlockChecked < lastIrreversible) {
+            // Drain the missed-block gap in bounded batches so a long backlog can't
+            // fire thousands of get_ops_in_block RPCs in one burst (the burst is what
+            // triggers the node's "upstream temporarily unavailable" rate limiting).
+            // maxBlocksPerPass spreads catch-up across successive poll ticks; the
+            // remainder is picked up on the next pass. Rotation is gated on WALL-CLOCK
+            // time, independent of how many blocks this pass drains, so the widget
+            // keeps shuffling cards every displayIntervalMs even mid-catch-up.
+            var warnedBlockFailure = false;
+            var drained = 0;
+            while (state.lastBlockChecked < lastIrreversible && drained < config.maxBlocksPerPass) {
                 var blockNum = state.lastBlockChecked + 1;
-                // Rotate the display on wall-clock time even during a long catch-up
-                // batch, so the widget keeps shuffling cards every 90 s without
-                // waiting for the entire backlog to drain.
-                if ((Date.now() - lastCatchupRotation) >= config.displayIntervalMs) {
+                // Gate on the persistent state.lastDisplayTime (not a per-tick local), so
+                // a transient upstream failure can't reset the 90 s rotation clock.
+                if (!state.lastDisplayTime || (Date.now() - state.lastDisplayTime) >= config.displayIntervalMs) {
                     await displayCycle();
                     updateStatus();
-                    lastCatchupRotation = Date.now();
                 }
-                var ops = await rpc('condenser_api.get_ops_in_block', [blockNum, false]);
+                var ops = null;
+                var fetchFailed = false;
+                for (var attempt = 0; attempt < BLOCK_RETRIES; attempt++) {
+                    try {
+                        ops = await rpc('condenser_api.get_ops_in_block', [blockNum, false]);
+                        fetchFailed = false;
+                        break;
+                    } catch (e) {
+                        fetchFailed = true;
+                        if (!warnedBlockFailure) {
+                            console.warn('VAAS: block fetch failed (upstream busy), pausing catch-up until next poll:', e && e.message);
+                            warnedBlockFailure = true;
+                        }
+                        await sleep(BLOCK_RETRY_MS);
+                    }
+                }
+                if (fetchFailed) break; // leave lastBlockChecked untouched; retry this block next pass
                 if (ops && Array.isArray(ops)) await processBlockOps(ops, blockNum);
                 state.lastBlockChecked = blockNum;
                 state.currentBlock = blockNum;
+                drained++;
             }
-            // Try to rotate the display once per poll pass. displayCycle() is
-            // internally time-gated (Date.now() vs lastDisplayTime), so this fires
-            // at most once per rotation interval even after a long background
-            // catch-up burst, and harmlessly no-ops on passes where < 90 s remain.
-            await displayCycle();
-            updateStatus();
         } catch (e) {
             console.error('VAAS poll error:', e);
         } finally {
+            // Always attempt one display rotation per pass, even when an RPC above threw
+            // or the catch-up batch was cut short. displayCycle() self-gates on
+            // state.lastDisplayTime, so this fires at most once per displayIntervalMs and
+            // keeps the widget refreshing every ~90 s while the upstream recovers.
+            try {
+                await displayCycle();
+                updateStatus();
+            } catch (e) { /* display errors are non-fatal */ }
             state.polling = false;
         }
     }
 
     // Poll on a fixed interval. While the tab is hidden, browsers throttle this
     // timer heavily (some to ~1/minute), so polling alone can't keep currentBlock
-    // in lockstep with the chain. pollBlock() therefore drains the entire
-    // missed-block gap in one pass on every tick, so even a throttled background
-    // poll fully catches up the moment it fires.
+    // in lockstep with the chain. pollBlock() therefore drains the missed-block
+    // gap in bounded batches (maxBlocksPerPass) on every tick, so even a throttled
+    // background poll catches up steadily without bursting the RPC upstream.
     function startPolling() {
         if (state.destroyed || !state.mounted) return;
         pollTimer = setInterval(function () {
