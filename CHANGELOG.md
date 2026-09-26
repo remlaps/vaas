@@ -19,6 +19,14 @@ All notable changes to this project are documented in this file.
   keyed by host only (not host+path), so all pages on the same host share one
   pool/display and the widget stays consistent when navigating between pages
   (e.g. portfolio search → leaderboard → home).
+- **Bounded catch-up and a slower poll cadence (RPC-load reduction).**
+  `pollBlock()` now drains at most `maxBlocksPerPass` (default `100`) blocks per
+  tick instead of the entire backlog in one burst. Firing one
+  `get_ops_in_block` per block in a single pass was tripping node rate limiting
+  ("upstream temporarily unavailable"); catch-up now simply resumes on the next
+  tick. The default `pollMsBehind` is raised from `1000` to `3000` ms to match
+  Steem's ~3 s block time, cutting steady-state `get_dynamic_global_properties`
+  traffic by roughly two thirds.
 
 ### Fixed
 
@@ -35,6 +43,15 @@ All notable changes to this project are documented in this file.
 - Added a `visibilitychange` / `pageshow` listener so the widget immediately
   catches up the moment the tab regains focus (including bfcache restores),
   instead of waiting for the next interval tick.
+- Fixed the **display failing to rotate (~90 s) while catching up during
+  upstream errors**. A single transient `get_ops_in_block` failure used to abort
+  the whole catch-up pass *and* skip the display rotation, because the catch-up
+  rotation gate was a per-tick local and the final `displayCycle()` sat inside
+  the aborted `try`. Rotation is now gated on the persistent
+  `state.lastDisplayTime`; `displayCycle()` is always attempted in a `finally`
+  block; and each block fetch is retried (`BLOCK_RETRIES`, `BLOCK_RETRY_MS`)
+  with backoff, so a persistent failure pauses catch-up (leaving
+  `lastBlockChecked` untouched) instead of crashing the pass.
 
 ## [0.2.0] - 2026-08-12
 
